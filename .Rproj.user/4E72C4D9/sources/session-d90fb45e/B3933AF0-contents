@@ -1,0 +1,13 @@
+# Normalisation locale (par sous-ensemble)
+norm01 <- function(x) {
+  rng <- range(x, na.rm = TRUE)
+  
+  if (!is.finite(rng[1]) || !is.finite(rng[2]) || rng[1] == rng[2]) {
+    return(ifelse(is.na(x), NA_real_, 1))
+  }
+  
+  scales::rescale(x, to = c(0, 1), from = rng)
+}
+
+
+norm01(c(1, 2, 3, NA))

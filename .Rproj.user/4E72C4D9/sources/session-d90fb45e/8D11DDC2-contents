@@ -1,0 +1,270 @@
+# -- R/metrics.R — Matrice de confusion + métriques & courbes d'entraînement ----
+# Conventions : roxygen, tout namespacé (pkg::fun), PAS de library()/install.*
+# verbose en DERNIER (FALSE), toutes les fonctions se terminent par return(...)
+
+# Dépendances suggérées : ggplot2, dplyr, tidyr, tibble, scales, gridExtra,
+# ggplotify, patchwork. Aucune n'est attachée via library().
+
+# ============================================================================
+# 1) Heatmap double gradient (centre vs marges)
+# ============================================================================
+
+#' Heatmap double gradient (centre bleu, bords vert) sans ggnewscale
+#'
+#' @param df_long tibble Sortie d'une fonction interne cm_with_sums_long(),
+#'   colonnes attendues : Truth, Pred, Freq, is_sum (logique)
+#' @param title character Titre du graphique ("Matrice de confusion")
+#' @param y_lab character Libellé de l'axe Y ("prédiction du modèle")
+#' @param core_pal character(2) Palette hex du coeur (min->max)
+#' @param sum_pal character(2) Palette hex des marges (min->max)
+#' @param verbose logical Messages (FALSE)
+#' @return ggplot2::ggplot
+viz_confusion_heatmap_sums <- function(df_long,
+                                       title = "Matrice de confusion",
+                                       y_lab  = "prédiction du modèle",
+                                       core_pal = c("#cfe5f2", "#2b8cbe"),
+                                       sum_pal  = c("#a1d99b", "#31a354"),
+                                       verbose = FALSE) {
+  # Sépare coeur vs marges
+  core_df <- dplyr::filter(df_long, !is_sum)
+  sum_df  <- dplyr::filter(df_long,  is_sum)
+  
+  # Générateurs de couleurs
+  col_fun_core <- scales::col_numeric(core_pal, domain = c(0, 1), na.color = "#ffffff")
+  col_fun_sum  <- scales::col_numeric(sum_pal,  domain = c(0, 1), na.color = "#ffffff")
+  
+  # Normalisation locale (par sous-ensemble)
+  norm01 <- function(x) {
+    rng <- base::range(x, na.rm = TRUE)
+    if (!base::is.finite(rng[1]) || !base::is.finite(rng[2]) || rng[1] == rng[2]) {
+      return(base::ifelse(base::is.na(x), base::NA_real_, 1))
+    }
+    return(scales::rescale(x, to = c(0, 1), from = rng))
+  }
+  
+  if (nrow(core_df) > 0) core_df$fill_hex <- base::ifelse(base::is.na(core_df$Freq), "#ffffff", col_fun_core(norm01(core_df$Freq)))
+  if (nrow(sum_df)  > 0) sum_df$fill_hex  <- base::ifelse(base::is.na(sum_df$Freq),  "#ffffff", col_fun_sum(norm01(sum_df$Freq)))
+  
+  # Tracé
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_tile(data = core_df, ggplot2::aes(x = Pred, y = Truth, fill = fill_hex), color = "white", linewidth = 0.6) +
+    ggplot2::geom_text(data = core_df, ggplot2::aes(x = Pred, y = Truth, label = base::ifelse(base::is.na(Freq), "", Freq)), size = 4.2) +
+    ggplot2::scale_fill_identity() +
+    ggplot2::geom_tile(data = sum_df,  ggplot2::aes(x = Pred, y = Truth, fill = fill_hex), color = "white", linewidth = 0.6) +
+    ggplot2::geom_text(data = sum_df,  ggplot2::aes(x = Pred, y = Truth, label = base::ifelse(base::is.na(Freq), "", Freq)), size = 4.2) +
+    ggplot2::scale_x_discrete(position = "top") +
+    ggplot2::coord_fixed() +
+    ggplot2::labs(title = title, x = NULL, y = y_lab) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(legend.position = "none",
+                   panel.grid = ggplot2::element_blank(),
+                   axis.title.x = ggplot2::element_blank(),
+                   axis.text.x = ggplot2::element_text(vjust = 0))
+  
+  if (isTRUE(verbose)) base::message("[cm] heatmap (double gradient) prête.")
+  return(p)
+}
+
+# ============================================================================
+# 2) Tableau des métriques (macro)
+# ============================================================================
+
+#' Tableau ggplot des métriques globales (macro)
+#'
+#' @param metrics_list list Doit contenir au minimum `accuracy` et `macro_tbl`
+#'   (ou `macro`) avec colonnes macro_precision, macro_recall, macro_f1.
+#' @param digits integer Nombre de décimales (2)
+#' @param verbose logical Messages (FALSE)
+#' @return ggplot2::ggplot (table stylisée encapsulée)
+metrics_table_plot <- function(metrics_list, digits = 2, verbose = FALSE) {
+  macro <- if (!base::is.null(metrics_list$macro_tbl)) metrics_list$macro_tbl else metrics_list$macro
+  acc   <- metrics_list$accuracy
+  if (base::is.null(macro) || base::is.null(acc)) base::stop("metrics_list doit contenir 'accuracy' et macro(_tbl).")
+  
+  spec <- if (!base::is.null(macro$specificity)) macro$specificity else if (!base::is.null(macro$Specificity)) macro$Specificity else base::NA_real_
+  rec  <- if (!base::is.null(macro$macro_recall)) macro$macro_recall else if (!base::is.null(macro$Recall)) macro$Recall else base::NA_real_
+  f1   <- if (!base::is.null(macro$macro_f1)) macro$macro_f1 else if (!base::is.null(macro$F1)) macro$F1 else base::NA_real_
+  
+  df_wide <- tibble::tibble(
+    Specificity = spec,
+    Sensitivity = rec,
+    Accuracy    = acc,
+    `F1 score`  = f1
+  ) |>
+    dplyr::mutate(dplyr::across(dplyr::everything(), ~ base::sprintf(base::paste0("%.", digits, "f"), .x)))
+  
+  tbl <- gridExtra::tableGrob(
+    df_wide, rows = NULL,
+    theme = gridExtra::ttheme_minimal(
+      core   = base::list(fg_params = base::list(fontface = 1, just = "center")),
+      colhead= base::list(fg_params = base::list(fontface = 2), bg_params = base::list(fill = "#e6e6e6", col = NA))
+    )
+  )
+  tbl$widths <- grid::unit(rep(1 / base::ncol(df_wide), base::ncol(df_wide)), "npc")
+  p <- ggplotify::as.ggplot(tbl)
+  if (isTRUE(verbose)) base::message("[cm] tableau métriques prêt.")
+  return(p)
+}
+
+# ============================================================================
+# 3) Panneau : matrice de confusion + tableau des métriques
+# ============================================================================
+
+#' Panneau complet : matrice de confusion + tableau des métriques (prédictions)
+#'
+#' @param y_true factor|character|integer Vérités terrain (longueur n)
+#' @param y_pred factor|character|integer Prédictions (longueur n)
+#' @param labels character(NULL) Niveaux/ordre des classes (facultatif)
+#' @param title character Titre du panneau
+#' @param digits integer Décimales pour le tableau des métriques
+#' @param show_bottomright logical Afficher la somme globale en (sum,sum)
+#' @param verbose logical Messages (FALSE)
+#' @return patchwork::wrap_plots( heatmap, tableau )
+#' @details Calcule cm + métriques per-class/macros, construit df_long avec lignes/colonnes "sum".
+viz_confusion_panel_from_predictions <- function(y_true,
+                                                 y_pred,
+                                                 labels = NULL,
+                                                 title = "Confusion Matrix (Test)",
+                                                 digits = 2L,
+                                                 show_bottomright = FALSE,
+                                                 verbose = FALSE) {
+  stopifnot(base::length(y_true) == base::length(y_pred))
+  n <- base::length(y_true)
+  if (isTRUE(verbose)) base::message("[cm-panel] n=", n)
+  
+  # Harmonisation des niveaux
+  if (base::is.null(labels)) {
+    labs <- base::sort(base::unique(base::c(base::as.character(y_true), base::as.character(y_pred))))
+  } else {
+    labs <- base::as.character(labels)
+  }
+  y_true_f <- base::factor(base::as.character(y_true), levels = labs)
+  y_pred_f <- base::factor(base::as.character(y_pred), levels = labs)
+  
+  # Matrice de confusion
+  cm_tab <- base::table(Truth = y_true_f, Pred = y_pred_f)
+  cm <- base::as.matrix(cm_tab)
+  
+  # Métriques
+  classes <- base::rownames(cm)
+  total <- base::sum(cm)
+  acc <- if (total > 0) base::sum(base::diag(cm)) / total else base::NA_real_
+  
+  per <- lapply(base::seq_along(classes), function(i) {
+    TP <- cm[i, i]
+    FP <- base::sum(cm[, i]) - TP
+    FN <- base::sum(cm[i, ]) - TP
+    TN <- total - TP - FP - FN
+    precision   <- base::ifelse((TP + FP) == 0, base::NA_real_, TP / (TP + FP))
+    recall      <- base::ifelse((TP + FN) == 0, base::NA_real_, TP / (TP + FN))
+    specificity <- base::ifelse((TN + FP) == 0, base::NA_real_, TN / (TN + FP))
+    denom <- precision + recall
+    f1 <- if (base::is.na(precision) || base::is.na(recall) || base::isTRUE(denom == 0)) base::NA_real_ else 2 * precision * recall / denom
+    tibble::tibble(class = classes[i], TP = TP, FP = FP, FN = FN, TN = TN,
+                   precision = precision, recall = recall, specificity = specificity, f1 = f1)
+  }) |>
+    dplyr::bind_rows()
+  
+  macro_tbl <- tibble::tibble(
+    macro_precision = base::mean(per$precision, na.rm = TRUE),
+    macro_recall    = base::mean(per$recall,    na.rm = TRUE),
+    macro_f1        = base::mean(per$f1,        na.rm = TRUE),
+    weighted_f1     = stats::weighted.mean(per$f1, w = per$TP + per$FN, na.rm = TRUE)
+  )
+  metrics_list <- base::list(accuracy = acc, per_class_tbl = per, macro_tbl = macro_tbl)
+  if (isTRUE(verbose)) base::message(base::sprintf("[cm-panel] acc=%.4f, macro_f1=%.4f", acc, macro_tbl$macro_f1))
+  
+  # df_long avec lignes/colonnes de sommes
+  classes <- base::colnames(cm)
+  x_levels <- base::c(classes, "sum"); y_levels <- base::c(classes, "sum")
+  
+  core <- base::as.data.frame(stats::xtabs(Freq ~ Truth + Pred,
+                                           data = stats::setNames(base::as.data.frame(base::as.table(cm)), c("Truth","Pred","Freq"))),
+                              stringsAsFactors = FALSE)
+  row_sum <- stats::aggregate(Freq ~ Truth, core, sum)
+  row_sum$Pred <- "sum"; row_sum <- row_sum[, c("Truth","Pred","Freq")]
+  col_sum <- stats::aggregate(Freq ~ Pred, core, sum)
+  col_sum$Truth <- "sum"; col_sum <- col_sum[, c("Truth","Pred","Freq")]
+  corner <- base::data.frame(Truth = "sum", Pred = "sum",
+                             Freq = if (isTRUE(show_bottomright)) base::sum(cm) else base::NA_real_)
+  df_long <- dplyr::bind_rows(core, row_sum, col_sum, corner)
+  df_long <- tidyr::complete(df_long, Truth = y_levels, Pred = x_levels, fill = base::list(Freq = base::NA_real_))
+  df_long$Truth <- base::factor(df_long$Truth, levels = y_levels)
+  df_long$Pred  <- base::factor(df_long$Pred,  levels = x_levels)
+  df_long$is_sum <- (df_long$Truth == "sum") | (df_long$Pred == "sum")
+  if (isTRUE(verbose)) base::message("[cm-panel] df_long: ", nrow(df_long), " lignes")
+  
+  # Graphiques
+  p_cm  <- viz_confusion_heatmap_sums(df_long, title = title, verbose = verbose)
+  p_tbl <- metrics_table_plot(metrics_list, digits = digits, verbose = verbose)
+  p <- patchwork::wrap_plots(p_cm, p_tbl, ncol = 1, heights = c(3, 1))
+  return(p)
+}
+
+# ============================================================================
+# 4) Courbes d'entraînement (history Keras) — compat keras3/reticulate
+# ============================================================================
+
+#' Courbes d'entraînement (loss & accuracy) depuis un objet history keras
+#'
+#' @param history list|python object  typiquement la sortie de keras3::fit()
+#' @param title character  Titre
+#' @param metrics character  c("loss","accuracy")
+#' @param smooth logical  Lissage LOESS (FALSE)
+#' @param verbose logical  Messages (FALSE)
+#' @return ggplot2::ggplot  Facettes par type de métrique
+history_curves_plot <- function(history,
+                                title = "Training curves",
+                                metrics = c("loss", "accuracy"),
+                                smooth = FALSE,
+                                verbose = FALSE) {
+  # Extraction robuste
+  if ("reticulate.python.builtin.object" %in% class(history) || "py_object" %in% class(history)) {
+    if (reticulate::py_has_attr(history, "history")) {
+      history <- reticulate::py_to_r(history$history)
+    } else if (reticulate::py_has_attr(history, "metrics")) {
+      history <- reticulate::py_to_r(history$metrics)
+    } else {
+      history <- reticulate::py_to_r(history)
+    }
+  } else if (base::is.list(history) && !base::is.null(history$history)) {
+    history <- history$history
+  }
+  
+  df <- tibble::as_tibble(history)
+  df$epoch <- base::seq_len(base::nrow(df))
+  
+  # Aliases courants
+  nm <- base::names(df)
+  nm <- base::sub("sparse_categorical_accuracy", "accuracy", nm)
+  nm <- base::sub("val_sparse_categorical_accuracy", "val_accuracy", nm)
+  nm <- base::sub("categorical_accuracy", "accuracy", nm)
+  nm <- base::sub("val_categorical_accuracy", "val_accuracy", nm)
+  nm <- base::sub("acc$", "accuracy", nm)
+  nm <- base::sub("val_acc$", "val_accuracy", nm)
+  base::names(df) <- nm
+  
+  # Colonnes à garder
+  keep <- base::unique(c("epoch", metrics, base::paste0("val_", metrics)))
+  keep <- base::intersect(keep, base::names(df))
+  if (base::length(keep) <= 1L) {
+    base::stop("Aucune des colonnes attendues ('", paste(metrics, collapse = ","), ") trouvée. Colonnes disponibles: ", paste(base::names(df), collapse=","))
+  }
+  df <- df[, keep, drop = FALSE]
+  
+  long <- tidyr::pivot_longer(df, cols = -epoch, names_to = "metric", values_to = "value")
+  long$set  <- ifelse(base::startsWith(long$metric, "val_"), "validation", "train")
+  long$kind <- base::sub("^val_", "", long$metric)
+  
+  p <- ggplot2::ggplot(long, ggplot2::aes(x = epoch, y = value, linetype = set)) +
+    ggplot2::geom_line(linewidth = 0.8) +
+    ggplot2::labs(title = title, x = "Epoch", y = NULL, linetype = NULL) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::facet_wrap(~ kind, scales = "free_y", ncol = 1)
+  
+  if (isTRUE(smooth)) {
+    p <- p + ggplot2::geom_smooth(se = FALSE, linewidth = 0.6, method = "loess")
+  }
+  
+  return(p)
+}

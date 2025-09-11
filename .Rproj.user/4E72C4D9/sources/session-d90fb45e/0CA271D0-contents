@@ -1,0 +1,258 @@
+# =====================================================================
+# R/metrics_plots.R (no-ggnewscale)
+# ---------------------------------------------------------------------
+# Objet : Matrice de confusion avec double gradient SANS {ggnewscale}
+#         - centre (cellules normales) : gradient BLEU
+#         - bords (lignes/colonnes "sum") : gradient VERT
+#         + tableau métriques + courbes d'entraînement.
+# Dépendances : ggplot2, dplyr, tidyr, purrr, reticulate, gridExtra, ggplotify, patchwork
+#   (pas de ggnewscale)
+# =====================================================================
+
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(dplyr)
+  library(tidyr)
+  library(purrr)
+  library(reticulate)
+})
+
+if (!requireNamespace("gridExtra", quietly = TRUE))
+  message("[Info] gridExtra non installé : install.packages('gridExtra')")
+if (!requireNamespace("ggplotify", quietly = TRUE))
+  message("[Info] ggplotify non installé : install.packages('ggplotify')")
+if (!requireNamespace("patchwork", quietly = TRUE))
+  message("[Info] patchwork non installé : install.packages('patchwork')")
+if (!requireNamespace("scales", quietly = TRUE))
+  message("[Info] scales non installé : install.packages('scales')")
+
+# ---------------------------------------------------------------------
+# 1) Métriques à partir d'une matrice de confusion
+# ---------------------------------------------------------------------
+
+#' Calcule accuracy, F1, recall (sensibilité), specificity (macro) + per-class
+#' @param cm (table|matrix) matrice de confusion (lignes = vérité, colonnes = prédiction)
+#' @return (list) accuracy (num), per_class (tibble), macro (tibble 1 ligne)
+metrics_from_cm <- function(cm) {
+  cm <- as.matrix(cm)
+  classes <- colnames(cm)
+  total <- sum(cm)
+  acc <- sum(diag(cm)) / total
+  
+  per_class <- purrr::map_dfr(seq_along(classes), function(i) {
+    TP <- cm[i, i]; FP <- sum(cm[-i, i]); FN <- sum(cm[i, -i]); TN <- total - TP - FP - FN
+    precision   <- if ((TP + FP) == 0) NA_real_ else TP / (TP + FP)
+    recall      <- if ((TP + FN) == 0) NA_real_ else TP / (TP + FN)
+    specificity <- if ((TN + FP) == 0) NA_real_ else TN / (TN + FP)
+    f1 <- if (is.na(precision) || is.na(recall) || (precision + recall) == 0) NA_real_ else 2 * precision * recall / (precision + recall)
+    tibble::tibble(class = classes[i], TP = TP, FP = FP, FN = FN, TN = TN,
+                   Precision = precision, Recall = recall, Specificity = specificity, F1 = f1)
+  })
+  
+  macro <- per_class |>
+    dplyr::summarise(
+      Precision = mean(Precision, na.rm = TRUE),
+      Recall = mean(Recall, na.rm = TRUE),
+      Specificity = mean(Specificity, na.rm = TRUE),
+      F1 = mean(F1, na.rm = TRUE)
+    )
+  
+  list(accuracy = acc, per_class = per_class, macro = macro)
+}
+
+# ---------------------------------------------------------------------
+# 2) Heatmap avec ligne/colonne "sum" + double gradient SANS ggnewscale
+# ---------------------------------------------------------------------
+
+#' Étend une matrice de confusion en ajoutant ligne/colonne "sum"
+#' (générique : fonctionne pour K classes)
+#' @param cm (table|matrix) lignes = vérité, colonnes = prédiction
+#' @param show_bottomright (log) TRUE pour afficher la somme globale en (sum,sum)
+#' @return tibble Truth, Pred, Freq, is_sum
+cm_with_sums_long <- function(cm, show_bottomright = FALSE) {
+  cm <- as.matrix(cm)
+  classes <- colnames(cm)
+  stopifnot(!is.null(classes))
+  x_levels <- c(classes, "sum"); y_levels <- c(classes, "sum")
+  
+  core <- as.data.frame(as.table(cm), stringsAsFactors = FALSE)
+  names(core) <- c("Truth", "Pred", "Freq")
+  
+  row_sum <- aggregate(Freq ~ Truth, core, sum)
+  row_sum$Pred <- "sum"; row_sum <- row_sum[, c("Truth","Pred","Freq")]
+  
+  col_sum <- aggregate(Freq ~ Pred, core, sum)
+  col_sum$Truth <- "sum"; col_sum <- col_sum[, c("Truth","Pred","Freq")]
+  
+  corner <- data.frame(Truth = "sum", Pred = "sum",
+                       Freq = if (show_bottomright) sum(cm) else NA_real_)
+  
+  df <- dplyr::bind_rows(core, row_sum, col_sum, corner)
+  df <- tidyr::complete(df, Truth = y_levels, Pred = x_levels,
+                        fill = list(Freq = NA_real_))
+  df$Truth <- factor(df$Truth, levels = y_levels)
+  df$Pred  <- factor(df$Pred,  levels = x_levels)
+  
+  df$is_sum <- df$Truth == "sum" | df$Pred == "sum"
+  tibble::as_tibble(df)
+}
+
+#' Heatmap (double gradient sans ggnewscale)
+#' @param df_long (tibble) issu de cm_with_sums_long()
+#' @param title (chr) titre
+#' @param y_lab (chr) label axe Y
+#' @param core_pal (chr vec) palette centre (2 hex) par défaut bleu clair→bleu foncé
+#' @param sum_pal  (chr vec) palette sums  (2 hex) par défaut vert clair→vert foncé
+#' @return ggplot
+viz_confusion_heatmap_sums <- function(df_long,
+                                       title = "Matrice de confusion",
+                                       y_lab  = "prédiction du modèle",
+                                       core_pal = c("#cfe5f2", "#2b8cbe"),
+                                       sum_pal  = c("#a1d99b", "#31a354")) {
+  # Séparation des deux groupes
+  core_df <- dplyr::filter(df_long, !is_sum)
+  sum_df  <- dplyr::filter(df_long,  is_sum)
+  
+  # Générateurs de couleurs (0..1) -> hex, via scales::col_numeric
+  col_fun_core <- scales::col_numeric(core_pal, domain = c(0, 1), na.color = "#ffffff")
+  col_fun_sum  <- scales::col_numeric(sum_pal,  domain = c(0, 1), na.color = "#ffffff")
+  
+  # Normalisation par groupe (si min=max, on met 1 pour obtenir la teinte haute)
+  norm_core <- function(x) {
+    rng <- range(x, na.rm = TRUE)
+    if (!is.finite(rng[1]) || !is.finite(rng[2]) || rng[1] == rng[2]) return(ifelse(is.na(x), NA_real_, 1))
+    scales::rescale(x, to = c(0, 1), from = rng)
+  }
+  norm_sum <- function(x) {
+    rng <- range(x, na.rm = TRUE)
+    if (!is.finite(rng[1]) || !is.finite(rng[2]) || rng[1] == rng[2]) return(ifelse(is.na(x), NA_real_, 1))
+    scales::rescale(x, to = c(0, 1), from = rng)
+  }
+  
+  if (nrow(core_df) > 0) {
+    core_df$fill_hex <- ifelse(is.na(core_df$Freq), "#ffffff", col_fun_core(norm_core(core_df$Freq)))
+  }
+  if (nrow(sum_df) > 0) {
+    sum_df$fill_hex  <- ifelse(is.na(sum_df$Freq),  "#ffffff", col_fun_sum(norm_sum(sum_df$Freq)))
+  }
+  
+  # Plot : on dessine les deux couches avec fill pré-calculé + scale_identity()
+  ggplot() +
+    # centre (bleu)
+    geom_tile(data = core_df, aes(Pred, Truth, fill = fill_hex), color = "white", linewidth = 0.6) +
+    geom_text(data = core_df, aes(Pred, Truth, label = ifelse(is.na(Freq), "", Freq)), size = 4.2) +
+    scale_fill_identity() +
+    # sums (vert)
+    geom_tile(data = sum_df, aes(Pred, Truth, fill = fill_hex), color = "white", linewidth = 0.6) +
+    geom_text(data = sum_df, aes(Pred, Truth, label = ifelse(is.na(Freq), "", Freq)), size = 4.2) +
+    scale_x_discrete(position = "top") +
+    coord_fixed() +
+    labs(title = title, x = NULL, y = y_lab) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.x  = element_text(vjust = 0)
+    )
+}
+
+# ---------------------------------------------------------------------
+# 3) Tableau des métriques + wrapper d'assemblage
+# ---------------------------------------------------------------------
+
+metrics_table_plot <- function(metrics_list, digits = 2) {
+  macro <- metrics_list$macro
+  acc <- metrics_list$accuracy
+  df <- tibble::tibble(
+    Metric = c("Specificity", "Sensitivity", "Accuracy", "F1 score"),
+    Value = c(macro$Specificity, macro$Recall, acc, macro$F1)
+  ) |>
+    dplyr::mutate(Value = sprintf(paste0("%.", digits, "f"), Value))
+  
+  
+  # flip horizontal: une seule ligne, colonnes = métriques
+  df_wide <- tibble::tibble(
+    Specificity = df$Value[df$Metric == "Specificity"],
+    Sensitivity = df$Value[df$Metric == "Sensitivity"],
+    Accuracy = df$Value[df$Metric == "Accuracy"],
+    `F1 score` = df$Value[df$Metric == "F1 score"]
+  )
+  
+  
+  tbl <- gridExtra::tableGrob(
+    df_wide, rows = NULL,
+    theme = gridExtra::ttheme_minimal(
+      core = list(fg_params = list(fontface = 1, just = "center")),
+      colhead = list(
+        fg_params = list(fontface = 2),
+        bg_params = list(fill = "#e6e6e6", col = NA)
+      )
+    )
+  )
+  
+  
+  # Centrage du tableau : colonnes de largeur égale
+  tbl$widths <- grid::unit(rep(1/ncol(df_wide), ncol(df_wide)), "npc")
+  
+  
+  ggplotify::as.ggplot(tbl)
+}
+
+viz_confusion_with_sums_and_table <- function(cm, metrics_list,
+                                              title = "Confusion Matrix (Test)") {
+  df_long <- cm_with_sums_long(cm, show_bottomright = FALSE)
+  p_cm  <- viz_confusion_heatmap_sums(df_long, title = title)
+  p_tbl <- metrics_table_plot(metrics_list, digits = 2)
+  (p_cm / p_tbl) + patchwork::plot_layout(heights = c(3, 1))
+}
+
+# ---------------------------------------------------------------------
+# 4) Historique Keras → data.frame + courbes d'entraînement
+# ---------------------------------------------------------------------
+
+history_to_dataframe <- function(history) {
+  h <- try(reticulate::py_to_r(history$history), silent = TRUE)
+  if (!inherits(h, "try-error") && is.list(h) && length(h) > 0) {
+    df <- as.data.frame(h, optional = TRUE, check.names = FALSE)
+    n  <- if (!is.null(df$loss)) length(df$loss) else max(lengths(h))
+    df$epoch <- seq_len(n) - 1L
+  } else {
+    df <- try(as.data.frame(history), silent = TRUE)
+    if (inherits(df, "try-error") || is.null(df) || ncol(df) == 0) {
+      stop("No metrics found in history. Ensure you compiled with metrics and epochs>0.")
+    }
+    if (!"epoch" %in% names(df)) df$epoch <- seq_len(nrow(df)) - 1L
+  }
+  if ("sparse_categorical_accuracy" %in% names(df) && !"accuracy" %in% names(df)) {
+    df$accuracy <- df$sparse_categorical_accuracy
+  }
+  if ("val_sparse_categorical_accuracy" %in% names(df) && !"val_accuracy" %in% names(df)) {
+    df$val_accuracy <- df$val_sparse_categorical_accuracy
+  }
+  nm <- names(df)
+  if ("metric" %in% nm) names[df == "metric"] <- "metric_orig"  # garde-fou
+  if ("value"  %in% nm) names[df == "value"]  <- "value_orig"
+  names(df) <- make.unique(names(df), sep = "_")
+  df
+}
+
+history_plot <- function(history, title = "Training curves") {
+  df <- history_to_dataframe(history)
+  num_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+  metric_cols <- setdiff(num_cols, "epoch")
+  if (length(metric_cols) == 0L) {
+    stop(paste0("No numeric metric columns to plot. Available: ", paste(names(df), collapse = ", "))) }
+  long <- tidyr::pivot_longer(
+    df,
+    cols = dplyr::all_of(metric_cols),
+    names_to = "metric_name",
+    values_to = "metric_value"
+  )
+  long <- tidyr::drop_na(long, metric_value)
+  ggplot2::ggplot(long, ggplot2::aes(x = epoch, y = metric_value,
+                                     linetype = grepl("^val", metric_name), group = metric_name)) +
+    ggplot2::geom_line() +
+    ggplot2::labs(title = title, x = "Epoch", y = "Value", linetype = "Validation") +
+    ggplot2::theme_minimal(base_size = 13)
+}
