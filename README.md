@@ -11,14 +11,12 @@ Keras3_personal_training/
 ├─ R/
 │  ├─ models.R                 # Fonctions pour MLP supervisé et AutoEncodeur non-supervisé
 │  ├─ analysis.R               # PCA, MDS et visualisations avec ggplot2
-│  ├─ metrics.R                # Évaluation des modèles et métriques
-│  ├─ wrappers.R               # (optionnel) Fonctions build-and-fit génériques
-│  └─ utils.R                  # (optionnel) Helpers divers
+│  └─ metrics.R                # Évaluation des modèles et matrices de confusion
 ├─ man/                        # Documentation Rd générée
 ├─ inst/
 │  └─ examples/                # Scripts d’exemples d'utilisation
-│     ├─ run_iris.R            # Pipeline sur le jeu de données iris
-│     └─ run_msleep.R          # Pipeline sur le jeu de données msleep
+│     ├─ run_iris.R            # Test sur le jeu de données iris
+│     └─ run_msleep.R          # Test sur le jeu de données msleep
 ├─ tests/                      # (optionnel) Tests unitaires avec testthat
 ├─ README.md
 └─ .gitignore
@@ -27,14 +25,7 @@ Keras3_personal_training/
 ## Utilisation
 
 Consultez les scripts dans `inst/examples/` pour des exemples d'utilisation sur des jeux de données classiques (`iris`, `msleep`).  
-Les fonctions principales sont dans le dossier `R/` et couvrent la modélisation, l'analyse, l'évaluation et des utilitaires.
-
-## Installation
-
-```r
-# Depuis le dossier racine du projet
-devtools::install()
-```
+Les fonctions principales sont dans le dossier `R/` et couvrent les modèles et les visualisations.
 
 ## Licence
 
