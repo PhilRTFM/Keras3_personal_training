@@ -102,66 +102,51 @@ pca_plot <- function(x, dims = c(1, 2), group_factor = NULL,
 #' @param verbose logical, messages (FALSE)
 #'
 #' @return patchwork (wrap_plots) : MDS + Shepard
-mds_plot <- function(x, method = "euclidean", metric = TRUE, k = 2,
-                     labels = NULL, group_factor = NULL, title = NULL,
-                     verbose = FALSE) {
-  if (isTRUE(verbose)) base::message("[MDS] Calcul des distances : ", method)
+mds_plot <- function(x, method = "euclidean", k = 2,
+                                 labels = NULL, group_factor = NULL,
+                                 title = NULL, verbose = FALSE) {
+  if (isTRUE(verbose)) message("[MDS] Calcul des distances : ", method)
   dist_obj <- stats::dist(x = x, method = method)
   
-  if (isTRUE(verbose)) base::message("[MDS] Exécution ", if (metric) "métrique" else "non-métrique")
-  if (metric) {
-    fit <- stats::cmdscale(d = dist_obj, k = k, eig = TRUE)
-    coords <- tibble::as_tibble(fit$points, .name_repair = "minimal")
-  } else {
-    fit <- MASS::isoMDS(d = dist_obj, k = k)
-    coords <- tibble::as_tibble(fit$points, .name_repair = "minimal")
-  }
+  if (isTRUE(verbose)) message("[MDS] MDS métrique (cmdscale)")
+  fit <- stats::cmdscale(d = dist_obj, k = k, eig = TRUE)
+  coords <- tibble::as_tibble(fit$points, .name_repair = "minimal")
+  colnames(coords) <- paste0("Dim.", seq_len(ncol(coords)))
   
-  base::colnames(coords) <- base::paste0("Dim.", base::seq_len(base::ncol(coords)))
-  if (base::is.null(labels)) labels <- base::rownames(x)
+  if (is.null(labels)) labels <- rownames(x)
   coords$label <- labels
-  if (!base::is.null(group_factor)) coords$group <- base::as.factor(group_factor)
+  if (!is.null(group_factor)) coords$group <- as.factor(group_factor)
   
-  title_a <- if (base::is.null(title)) "A. MDS — configuration des objets" else base::paste("A.", title)
+  # Calcul du "stress de Kruskal" (1 - r^2)
+  d_orig <- as.numeric(dist_obj)
+  d_proj <- as.numeric(dist(coords[, startsWith(names(coords), "Dim.")]))
+  r <- cor(d_orig, d_proj)
+  stress <- 1 - r^2
   
-  # scatter MDS
-  if ("group" %in% base::colnames(coords)) {
-    p1 <- ggplot2::ggplot(coords, ggplot2::aes(x = .data$Dim.1, y = .data$Dim.2, color = .data$group)) +
-      ggplot2::geom_point() +
-      ggplot2::geom_text(ggplot2::aes(label = .data$label), hjust = 0, vjust = -0.5,
-                         size = 3, na.rm = TRUE, show.legend = FALSE) +
-      ggplot2::labs(title = title_a, x = "Dim 1", y = "Dim 2", color = "Groupe")
+  if (verbose) message("[MDS] Stress de Kruskal : ", round(stress, 4))
+  
+  title_plot <- if (is.null(title)) {
+    "MDS métrique"
   } else {
-    p1 <- ggplot2::ggplot(coords, ggplot2::aes(x = .data$Dim.1, y = .data$Dim.2)) +
-      ggplot2::geom_point() +
-      ggplot2::geom_text(ggplot2::aes(label = .data$label), hjust = 0, vjust = -0.5,
-                         size = 3, na.rm = TRUE) +
-      ggplot2::labs(title = title_a, x = "Dim 1", y = "Dim 2")
+    paste("MDS —", title)
   }
-  p1 <- p1 + ggplot2::theme_minimal(base_size = 12)
   
-  # Shepard
-  d_orig <- base::as.numeric(dist_obj)
-  d_proj <- base::as.numeric(stats::dist(coords[, base::startsWith(base::names(coords), "Dim."), drop = FALSE]))
-  df_shepard <- tibble::tibble(orig = d_orig, proj = d_proj)
-  rmse <- base::sqrt(base::mean((df_shepard$proj - df_shepard$orig)^2))
-  r <- stats::cor(df_shepard$orig, df_shepard$proj)
-  title_b <- base::sprintf("B. Diagramme de Shepard (RMSE=%.3f, r=%.3f)", rmse, r)
+  # Texte annoté
+  stress_label <- sprintf("Stress = %.3f", stress)
   
-  p2 <- ggplot2::ggplot(df_shepard, ggplot2::aes(x = .data$orig, y = .data$proj)) +
-    ggplot2::geom_point(alpha = 0.6, size = 0.8, shape = 16) +
-    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", size = 0.5) +
-    ggplot2::geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.6) +
-    ggplot2::annotate("text", x = base::max(df_shepard$orig, na.rm = TRUE),
-                      y = base::min(df_shepard$proj, na.rm = TRUE), hjust = 1, vjust = 0,
-                      label = base::sprintf("RMSE = %.3f\nr = %.3f", rmse, r), size = 3) +
-    ggplot2::labs(title = title_b, x = "Distance originale", y = "Distance projetée") +
+  # Plot
+  p <- ggplot2::ggplot(coords, ggplot2::aes(x = .data$Dim.1, y = .data$Dim.2)) +
+    ggplot2::geom_point(aes(color = group)) +
+    ggplot2::geom_text(aes(label = label), hjust = 0, vjust = -0.5, size = 3, na.rm = TRUE, show.legend = FALSE) +
+    ggplot2::labs(title = title_plot, x = "Dim 1", y = "Dim 2", color = "Groupe") +
+    ggplot2::annotate("text",
+                      x = max(coords$Dim.1, na.rm = TRUE),
+                      y = min(coords$Dim.2, na.rm = TRUE),
+                      hjust = 1, vjust = 0,
+                      label = stress_label,
+                      size = 8) +
     ggplot2::theme_minimal(base_size = 12)
   
-  if (isTRUE(verbose)) base::message("[MDS] Graphiques générés")
-  
-  res <- patchwork::wrap_plots(p1, p2, ncol = 2)
-  return(res)
+  return(p)
 }
 
-# (Pas d'exécution directe ni d'exemples à la fin pour éviter les effets lors de source())
