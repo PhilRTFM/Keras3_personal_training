@@ -2,6 +2,10 @@
 
 Ce projet est un petit projet de formation à l'utilisation de Keras3 et TensorFlow via R par l'entraînement et l'évaluation de modèles supervisés et non-supervisés avec Keras, et des analyses des modèles et des jeux de données.
 
+## Schéma de principe et fonctions
+
+<img width="1029" height="402" alt="Pipeline_Flowchart" src="https://github.com/user-attachments/assets/25c0c377-964b-49f5-9b63-efb9be4a2e70" />
+
 ## Structure du projet
 
 ```
