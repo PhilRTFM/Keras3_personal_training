@@ -94,9 +94,11 @@ run_iris_demo <- function(seed = 123L, verbose = FALSE) {
   # Analyse en composantes principales (ACP) et Scaling multidimensionnel (MDS)
   p_pca_raw <- pca_plot(X_raw, group_factor = y_fac, scale_unit = TRUE,
                         ellipse = TRUE, ellipse_level = 0.95, verbose = verbose)
-  p_mds_raw <- mds_plot(X_raw, method = "euclidean", metric = TRUE, k = 2,
-                        labels = base::rownames(iris), group_factor = y_fac,
-                        title = "Iris — MDS (brut)", verbose = verbose)
+  p_mds_raw <- mds_plot(
+    x = X_raw, method = "euclidean", k = 2,
+    labels = base::rownames(iris), group_factor = y_fac,
+    title = "Iris — MDS (brut)", verbose = verbose)
+  
   base::print(p_pca_raw)
   base::print(p_mds_raw)
 
@@ -183,9 +185,12 @@ run_iris_demo <- function(seed = 123L, verbose = FALSE) {
   # Analyse en composantes principales (ACP) et Scaling multidimensionnel (MDS) sur les données reconstruites
   p_pca_recon <- pca_plot(X_recon_all, group_factor = y_fac, scale_unit = TRUE,
                           ellipse = TRUE, ellipse_level = 0.95, verbose = verbose)
-  p_mds_recon <- mds_plot(X_recon_all, method = "euclidean", metric = TRUE, k = 2,
-                          labels = base::rownames(iris), group_factor = y_fac,
-                          title = "Iris — MDS (reconstruit par AE)", verbose = verbose)
+  p_mds_recon <- mds_plot(
+    x = X_recon_all, method = "euclidean", k = 2,
+    labels = base::rownames(iris), group_factor = y_fac,
+    title = "Iris — MDS (reconstruit par AE)", verbose = verbose
+  )
+  
   base::print(p_pca_recon)
   base::print(p_mds_recon)
 
