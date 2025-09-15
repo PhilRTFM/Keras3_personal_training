@@ -136,8 +136,8 @@ mds_plot <- function(x, method = "euclidean", k = 2,
   
   # Plot
   p <- ggplot2::ggplot(coords, ggplot2::aes(x = .data$Dim.1, y = .data$Dim.2)) +
-    ggplot2::geom_point(aes(color = group)) +
-    ggplot2::geom_text(aes(label = label), hjust = 0, vjust = -0.5, size = 3, na.rm = TRUE, show.legend = FALSE) +
+    ggplot2::geom_point(ggplot2::aes(color = group)) +
+    ggplot2::geom_text(ggplot2::aes(label = label), hjust = 0, vjust = -0.5, size = 3, na.rm = TRUE, show.legend = FALSE) +
     ggplot2::labs(title = title_plot, x = "Dim 1", y = "Dim 2", color = "Groupe") +
     ggplot2::annotate("text",
                       x = max(coords$Dim.1, na.rm = TRUE),
@@ -147,6 +147,39 @@ mds_plot <- function(x, method = "euclidean", k = 2,
                       size = 8) +
     ggplot2::theme_minimal(base_size = 12)
   
+  
   return(p)
 }
 
+#' Scatter plot comparant les distances entre deux matrices
+#'
+#' @param x_ref (matrix) matrice de référence (originale)
+#' @param x_test (matrix) matrice test à comparer (ex: reconstruite)
+#' @param title (character) titre du graphique
+#' @return (ggplot) scatter plot avec diagonale idéale et métriques
+scatter_distances <- function(x_ref, x_test, title = "Comparaison des distances") {
+  d_ref  <- as.numeric(stats::dist(x_ref))
+  d_test <- as.numeric(stats::dist(x_test))
+  
+  rmse <- sqrt(mean((d_test - d_ref)^2))
+  r <- cor(d_ref, d_test)
+  
+  df <- tibble::tibble(dist_ref = d_ref, dist_test = d_test)
+  
+  ggplot2::ggplot(df, ggplot2::aes(x = dist_ref, y = dist_test)) +
+    ggplot2::geom_point(alpha = 0.6, size = 0.8) +
+    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+    ggplot2::geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.6) +
+    ggplot2::annotate("text",
+                      x = max(d_ref, na.rm = TRUE),
+                      y = min(d_test, na.rm = TRUE),
+                      hjust = 1, vjust = 0,
+                      label = sprintf("RMSE = %.3f\nr = %.3f", rmse, r),
+                      size = 3) +
+    ggplot2::labs(
+      title = title,
+      x = "Distance — IRIS brut",
+      y = "Distance — IRIS reconstruit"
+    ) +
+    ggplot2::theme_minimal(base_size = 12)
+}
