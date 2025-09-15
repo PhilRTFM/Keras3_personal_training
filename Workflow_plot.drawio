@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" version="28.2.1">
   <diagram name="Page-1" id="hLjd40Mp4ctCxhCCKkwX">
-    <mxGraphModel dx="2541" dy="139" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="1030" dy="-639" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -92,10 +92,10 @@
           <mxGeometry x="634.5" y="1276" width="145" height="30" as="geometry" />
         </mxCell>
         <mxCell id="RDY0fzNDWBnP0Dt53zWQ-64" value="standardize_train_test&lt;div&gt;(x, idx_train, idx_test)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
-          <mxGeometry x="634.5" y="1318" width="145" height="40" as="geometry" />
+          <mxGeometry x="634.5" y="1340" width="145" height="40" as="geometry" />
         </mxCell>
         <mxCell id="RDY0fzNDWBnP0Dt53zWQ-65" value="predict_by_centroids&lt;div&gt;(z_train, y_train, z_test, class_levels)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
-          <mxGeometry x="634.5" y="1367" width="145" height="51" as="geometry" />
+          <mxGeometry x="637" y="1408" width="145" height="51" as="geometry" />
         </mxCell>
         <mxCell id="RDY0fzNDWBnP0Dt53zWQ-66" value="run_iris&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;(seed = 123L, verbose = FALSE)&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
           <mxGeometry x="377" y="1782" width="270" height="30" as="geometry" />
