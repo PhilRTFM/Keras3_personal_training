@@ -10,18 +10,22 @@ Ce projet est un petit projet de formation à l'utilisation de Keras3 et TensorF
 
 ```
 Keras3_personal_training/
-├─ DESCRIPTION                 # Métadonnées du package (Imports, Depends, etc.)
-├─ NAMESPACE                   # Généré par roxygen2
 ├─ R/
-│  ├─ models.R                 # Fonctions pour MLP supervisé et AutoEncodeur non-supervisé
-│  ├─ analysis.R               # PCA, MDS et visualisations avec ggplot2
-│  └─ metrics.R                # Évaluation des modèles et matrices de confusion
-├─ man/                        # Documentation Rd générée
-├─ inst/
-│  └─ examples/                # Scripts d’exemples d'utilisation
-│     ├─ run_iris.R            # Test sur le jeu de données iris
-│     └─ run_msleep.R          # Test sur le jeu de données msleep
-├─ tests/                      # (optionnel) Tests unitaires avec testthat
+│ ├─ utils.R # Prétraitements, helpers, export PDF
+│ ├─ suppervised_mod.R # Modèles MLP (supervisé, multi-classes)
+│ ├─ unsuppervised_mod.R # Autoencodeur (non supervisé)
+│ ├─ supervised_mod_multilabel.R # Modèles MLP (supervisé, multi-label)
+│ ├─ visualizations.R # PCA, MDS, Shepard plot
+│ ├─ eval_sup.R # Évaluations supervisées (matrices de confusion, métriques)
+│ ├─ eval_unsup.R # Évaluations non supervisées (erreurs reconstruction, confusion latente)
+│ └─ eval_multi_label.R # Évaluations multi-label (confusion, métriques)
+│
+├─ inst/examples/
+│ ├─ iris_suppervised.R # Pipeline complet MLP supervisé
+│ ├─ iris_unsuppervised.R # Pipeline complet Autoencodeur
+│ └─ iris_supervised_multilabel.R # Pipeline complet MLP multi-label
+│
+└─ outputs_iris/ # Dossier de sortie PDF (généré automatiquement)
 ├─ README.md
 └─ .gitignore
 ```
