@@ -232,18 +232,17 @@ open_pdf_16x9 <- function(path, width_in = 16, height_in = 9) {
   return(invisible(NULL))
 }
 
-#' Exporter une liste de plots en PDF 16:9
+#' Exporter une liste de plots en PDF 16:9 (robuste)
 #'
-#' @param plots list de ggplot
+#' Chaque plot est imprimé dans le PDF. 
+#' Si un plot échoue (ex: problème ggplot), il est ignoré avec un warning.
+#'
+#' @param plots list de ggplot / grid / tableGrob
 #' @param out_dir character dossier de sortie
 #' @param base_name character nom de base du fichier
 #' @param verbose logical
 #'
 #' @return character chemin du PDF créé
-#' @examples
-#' \dontrun{
-#' export_pdf_16x9(list(p1,p2), "outputs", "iris_demo")
-#' }
 #' @export
 export_pdf_16x9 <- function(plots,
                             out_dir,
@@ -252,13 +251,23 @@ export_pdf_16x9 <- function(plots,
   if (!base::dir.exists(out_dir)) base::dir.create(out_dir, recursive = TRUE)
   file <- base::file.path(out_dir, base::paste0(base_name, "_", iso_date(), ".pdf"))
   if (verbose) base::message("Export PDF : ", file)
+  
+  # ouverture PDF
   open_pdf_16x9(file)
-  for (p in plots) {
-    base::print(p)
+  
+  # impression sécurisée
+  for (i in seq_along(plots)) {
+    tryCatch({
+      base::print(plots[[i]])
+    }, error = function(e) {
+      message("⚠️ Plot ", i, " ignoré : ", conditionMessage(e))
+    })
   }
+  
   grDevices::dev.off()
   return(file)
 }
+
 
 #' Sauvegarde générique des résultats (RDS, PNG)
 #'
@@ -276,6 +285,33 @@ save_outputs <- function(res, output_dir = NULL, verbose = FALSE) {
   if (verbose) base::message("Résultats sauvegardés : ", rds_path)
   return(invisible(NULL))
 }
+
+
+#' Fixer la graine globale (R + Python/TensorFlow)
+#'
+#' Assure une meilleure reproductibilité entre les runs en fixant :
+#' - la graine R (`set.seed`)
+#' - la graine Python/TensorFlow via reticulate
+#'
+#' ⚠️ Note : sur GPU/cuDNN, certains calculs peuvent rester non déterministes.
+#'
+#' @param seed integer graine (par défaut 123L)
+#' @return invisible(NULL)
+#' @export
+set_seed_global <- function(seed = 123L) {
+  # graine côté R
+  base::set.seed(seed)
+  # graine côté Python/TensorFlow si disponible
+  if (reticulate::py_module_available("tensorflow")) {
+    reticulate::py_run_string(sprintf("import tensorflow as tf; tf.random.set_seed(%d)", seed))
+  }
+  if (reticulate::py_module_available("numpy")) {
+    reticulate::py_run_string(sprintf("import numpy as np; np.random.seed(%d)", seed))
+  }
+  if (interactive()) message("[set_seed_global] Seed fixé à ", seed)
+  return(invisible(NULL))
+}
+
 
 #' Trace les courbes d'entraînement (loss / accuracy)
 #'
@@ -339,4 +375,26 @@ history_curves_plot <- function(history,
     ggplot2::theme_minimal()
   
   return(p)
+}
+
+#' Binariseur multi-label (deux colonnes : label principal + second éventuel)
+#'
+#' @param y_main factor Longueur n
+#' @param y_second character|factor|NA Longueur n (NA si pas de 2e label)
+#' @param class_names character Noms des K classes (ordre des colonnes)
+#'
+#' @return matrix n x K (0/1)
+#' @export
+multi_label_binarizer <- function(y_main, y_second = NA, class_names = NULL) {
+  y_main <- base::as.factor(y_main)
+  if (base::is.null(class_names)) class_names <- base::levels(y_main)
+  K <- base::length(class_names); n <- base::length(y_main)
+  Y <- base::matrix(0L, nrow = n, ncol = K)
+  colnames(Y) <- class_names
+  for (i in seq_len(n)) {
+    Y[i, as.character(y_main[i])] <- 1L
+    if (!is.na(y_second[i])) Y[i, as.character(y_second[i])] <- 1L
+  }
+  storage.mode(Y) <- "integer"
+  return(Y)
 }

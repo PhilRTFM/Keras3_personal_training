@@ -169,3 +169,42 @@ shepard_plot <- function(dist_orig,
   if (verbose) base::message("Corrélation Shepard : ", round(corr_val, 3))
   return(p)
 }
+
+#' Trace les courbes d'entraînement keras (robuste)
+plot_history_simple <- function(history,
+                                title = "Courbes entraînement MLP multi-label") {
+  # --- Extraction ---
+  if (!is.null(history$history)) {
+    hist_df <- as.data.frame(history$history, stringsAsFactors = FALSE)
+  } else if (is.list(history) && !is.null(history$metrics)) {
+    hist_df <- as.data.frame(history$metrics, stringsAsFactors = FALSE)
+  } else if (is.data.frame(history)) {
+    hist_df <- history
+  } else {
+    stop("Format d'historique non reconnu : ", paste(class(history), collapse = ","))
+  }
+  
+  # Toujours ajouter epoch
+  if (!"epoch" %in% names(hist_df)) {
+    hist_df$epoch <- seq_len(nrow(hist_df))
+  }
+  
+  # Ne garder que colonnes numériques (évite NA/objets)
+  num_cols <- names(hist_df)[vapply(hist_df, is.numeric, logical(1))]
+  df_long <- tidyr::pivot_longer(
+    hist_df,
+    cols = tidyselect::all_of(num_cols),
+    names_to = "metric",
+    values_to = "value"
+  )
+  
+  # --- Plot ---
+  p <- ggplot2::ggplot(df_long,
+                       ggplot2::aes(x = epoch, y = value,
+                                    color = metric, group = metric)) +
+    ggplot2::geom_line(linewidth = 1) +
+    ggplot2::labs(title = title, x = "Epoch", y = "Valeur") +
+    ggplot2::theme_minimal()
+  
+  return(p)
+}

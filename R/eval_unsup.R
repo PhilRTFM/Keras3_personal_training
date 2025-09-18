@@ -19,35 +19,6 @@ reconstruction_errors <- function(X, X_recon) {
   return(list(mse = mse, rmse = rmse, mae = mae))
 }
 
-#' Distribution des erreurs de reconstruction
-#'
-#' @param errors numeric[] Vecteur d'erreurs (par ex. MSE par individu)
-#' @param title character Titre du graphique
-#' @param verbose logical Affiche des infos
-#'
-#' @return ggplot2::ggplot Histogramme/densité des erreurs
-#' @examples
-#' errs <- rnorm(100, mean = 0.1, sd = 0.05)
-#' p <- error_distributions(errs)
-#' @export
-error_distributions <- function(errors,
-                                title = "Distribution des erreurs",
-                                verbose = FALSE) {
-  df <- tibble::tibble(error = errors)
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = error)) +
-    ggplot2::geom_histogram(ggplot2::aes(y = ..density..),
-                            bins = 30, fill = "skyblue", color = "white", alpha = 0.7) +
-    ggplot2::geom_density(color = "red", size = 1, alpha = 0.6) +
-    ggplot2::labs(title = title, x = "Erreur", y = "Densité") +
-    ggplot2::theme_minimal()
-  if (verbose) {
-    base::message("Résumé erreurs : ",
-                  "moyenne=", round(base::mean(errors), 4),
-                  " écart-type=", round(stats::sd(errors), 4))
-  }
-  return(p)
-}
-
 #' Matrice de confusion à partir des centroïdes latents
 #'
 #' Utilise predict_by_centroids() (défini dans utils.R) et
