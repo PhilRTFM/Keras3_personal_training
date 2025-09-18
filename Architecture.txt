@@ -1,0 +1,19 @@
+Keras3_personal_training/
+├─ DESCRIPTION                 # Métadonnées du package (Imports, Depends, etc.)
+├─ NAMESPACE                   # Généré par roxygen2
+│
+├─ R/
+│  ├─ mlp_models.R             # Fonctions pour MLP supervisé et AutoEncodeur non-supervisé
+│  ├─ visualization.R          # PCA, MDS et visualisations avec ggplot2, matrices de confusion
+│  ├─ metrics.R                # Évaluation des modèles (F1 Score, Accuracy, Specificity, Sensivity)
+│  └─ preprocessing.R          # Préparer un jeu de donné pour l'utilisation dans un modèle.
+│
+├─ man/                        # Documentation Rd générée
+├─ inst/
+│  └─ examples/                # Scripts d’exemples d'utilisation
+│     ├─ run_iris.R            # Test sur le jeu de données iris
+│     └─ run_msleep.R          # Test sur le jeu de données msleep
+│
+├─ tests/                      # (optionnel) Tests unitaires avec testthat
+├─ README.md
+└─ .gitignores

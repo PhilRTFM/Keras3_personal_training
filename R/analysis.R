@@ -23,14 +23,21 @@ pca_plot <- function(x, dims = c(1, 2), group_factor = NULL,
   
   # --- Individus --------------------------------------------------------------
   ind_coords <- pca$ind$coord[, dims, drop = FALSE]
+  
+  # Sécuriser les labels (fallback si pas de rownames)
+  labels <- base::rownames(ind_coords)
+  if (is.null(labels)) {
+    labels <- base::paste0("obs", seq_len(base::nrow(ind_coords)))
+  }
+  
   df_ind <- tibble::tibble(
-    label = base::rownames(ind_coords),
+    label = labels,
     Dim.1 = ind_coords[, 1],
     Dim.2 = ind_coords[, 2]
   )
   if (!base::is.null(group_factor)) df_ind$group <- base::as.factor(group_factor)
   
-  # mapping de base (sans couleur)
+  # Plot individus
   p_ind <- ggplot2::ggplot(df_ind, ggplot2::aes(x = .data$Dim.1, y = .data$Dim.2)) +
     ggplot2::geom_point() +
     ggplot2::geom_text(ggplot2::aes(label = .data$label), hjust = 0, vjust = 1.2,
@@ -42,7 +49,6 @@ pca_plot <- function(x, dims = c(1, 2), group_factor = NULL,
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::coord_equal()
   
-  # couleur par groupe si présent
   if ("group" %in% base::colnames(df_ind)) {
     p_ind <- p_ind + ggplot2::aes(color = .data$group)
     if (isTRUE(ellipse)) {
@@ -80,13 +86,14 @@ pca_plot <- function(x, dims = c(1, 2), group_factor = NULL,
     ggplot2::coord_fixed(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
     ggplot2::theme_minimal(base_size = 12)
   
-  # --- Combinaison SANS charger patchwork dans le search path -----------------
-  # Utilise wrap_plots pour éviter l'opérateur '+' de patchwork.
+  # --- Combinaison ------------------------------------------------------------
   p_combined <- patchwork::wrap_plots(p_ind, p_var, ncol = 2, widths = c(1, 1))
   
   if (isTRUE(verbose)) base::message("[PCA] Plot généré")
   return(p_combined)
 }
+
+
 
 # ================================ MDS ========================================
 
@@ -101,85 +108,90 @@ pca_plot <- function(x, dims = c(1, 2), group_factor = NULL,
 #' @param title character|NULL, titre principal
 #' @param verbose logical, messages (FALSE)
 #'
-#' @return patchwork (wrap_plots) : MDS + Shepard
+#' @return ggplot
 mds_plot <- function(x, method = "euclidean", k = 2,
-                                 labels = NULL, group_factor = NULL,
-                                 title = NULL, verbose = FALSE) {
-  if (isTRUE(verbose)) message("[MDS] Calcul des distances : ", method)
+                     labels = NULL, group_factor = NULL,
+                     title = NULL, verbose = FALSE) {
+  if (isTRUE(verbose)) base::message("[MDS] Calcul des distances : ", method)
   dist_obj <- stats::dist(x = x, method = method)
   
-  if (isTRUE(verbose)) message("[MDS] MDS métrique (cmdscale)")
+  if (isTRUE(verbose)) base::message("[MDS] MDS métrique (cmdscale)")
   fit <- stats::cmdscale(d = dist_obj, k = k, eig = TRUE)
   coords <- tibble::as_tibble(fit$points, .name_repair = "minimal")
-  colnames(coords) <- paste0("Dim.", seq_len(ncol(coords)))
+  base::colnames(coords) <- base::paste0("Dim.", base::seq_len(base::ncol(coords)))
   
-  if (is.null(labels)) labels <- rownames(x)
-  coords$label <- labels
-  if (!is.null(group_factor)) coords$group <- as.factor(group_factor)
-  
-  # Calcul du "stress de Kruskal" (1 - r^2)
-  d_orig <- as.numeric(dist_obj)
-  d_proj <- as.numeric(dist(coords[, startsWith(names(coords), "Dim.")]))
-  r <- cor(d_orig, d_proj)
-  stress <- 1 - r^2
-  
-  if (verbose) message("[MDS] Stress de Kruskal : ", round(stress, 4))
-  
-  title_plot <- if (is.null(title)) {
-    "MDS métrique"
-  } else {
-    paste("MDS —", title)
+  # Labels (fallback si NULL ou rownames manquantes)
+  if (is.null(labels)) {
+    labels <- base::rownames(x)
   }
+  if (is.null(labels)) {
+    labels <- base::paste0("obs", base::seq_len(base::nrow(x)))
+  }
+  coords$label <- labels
   
-  # Texte annoté
-  stress_label <- sprintf("Stress = %.3f", stress)
+  if (!is.null(group_factor)) coords$group <- base::as.factor(group_factor)
   
-  # Plot
+  # Stress de Kruskal
+  d_orig <- base::as.numeric(dist_obj)
+  d_proj <- base::as.numeric(stats::dist(coords[, startsWith(names(coords), "Dim.")]))
+  r <- stats::cor(d_orig, d_proj)
+  stress <- 1 - r^2
+  if (isTRUE(verbose)) base::message("[MDS] Stress de Kruskal : ", base::round(stress, 4))
+  
+  title_plot <- if (is.null(title)) "MDS métrique" else base::paste("MDS —", title)
+  stress_label <- base::sprintf("Stress = %.3f", stress)
+  
   p <- ggplot2::ggplot(coords, ggplot2::aes(x = .data$Dim.1, y = .data$Dim.2)) +
     ggplot2::geom_point(ggplot2::aes(color = group)) +
-    ggplot2::geom_text(ggplot2::aes(label = label), hjust = 0, vjust = -0.5, size = 3, na.rm = TRUE, show.legend = FALSE) +
+    ggplot2::geom_text(ggplot2::aes(label = .data$label), hjust = 0, vjust = -0.5,
+                       size = 3, na.rm = TRUE, show.legend = FALSE) +
     ggplot2::labs(title = title_plot, x = "Dim 1", y = "Dim 2", color = "Groupe") +
     ggplot2::annotate("text",
-                      x = max(coords$Dim.1, na.rm = TRUE),
-                      y = min(coords$Dim.2, na.rm = TRUE),
+                      x = base::max(coords$Dim.1, na.rm = TRUE),
+                      y = base::min(coords$Dim.2, na.rm = TRUE),
                       hjust = 1, vjust = 0,
                       label = stress_label,
                       size = 8) +
     ggplot2::theme_minimal(base_size = 12)
   
-  
   return(p)
 }
 
-#' Scatter plot comparant les distances entre deux matrices
+
+# Pas encore implémentée' Comparaison de matrices de distances
 #'
-#' @param x_ref (matrix) matrice de référence (originale)
-#' @param x_test (matrix) matrice test à comparer (ex: reconstruite)
-#' @param title (character) titre du graphique
-#' @return (ggplot) scatter plot avec diagonale idéale et métriques
-scatter_distances <- function(x_ref, x_test, title = "Comparaison des distances") {
-  d_ref  <- as.numeric(stats::dist(x_ref))
-  d_test <- as.numeric(stats::dist(x_test))
+#' @param dist_a matrice ou dist
+#' @param dist_b matrice ou dist
+#' @param method méthode de corrélation
+#' @param verbose messages
+#'
+#' @return ggplot
+compare_distance_matrices <- function(dist_a, dist_b,
+                                      method = "pearson", verbose = FALSE) {
+  if (base::inherits(dist_a, "dist")) dist_a <- base::as.matrix(dist_a)
+  if (base::inherits(dist_b, "dist")) dist_b <- base::as.matrix(dist_b)
   
-  rmse <- sqrt(mean((d_test - d_ref)^2))
-  r <- cor(d_ref, d_test)
+  if (!base::all(base::dim(dist_a) == base::dim(dist_b))) base::stop("Les deux matrices doivent avoir les mêmes dimensions.")
+  if (!base::all(base::rownames(dist_a) == base::rownames(dist_b))) base::stop("Les deux matrices doivent avoir les mêmes noms de lignes.")
   
-  df <- tibble::tibble(dist_ref = d_ref, dist_test = d_test)
+  pairs <- base::which(base::upper.tri(dist_a), arr.ind = TRUE)
+  df <- base::data.frame(
+    object1 = base::rownames(dist_a)[pairs[, 1]],
+    object2 = base::rownames(dist_a)[pairs[, 2]],
+    dist_A = dist_a[pairs],
+    dist_B = dist_b[pairs]
+  )
   
-  ggplot2::ggplot(df, ggplot2::aes(x = dist_ref, y = dist_test)) +
-    ggplot2::geom_point(alpha = 0.6, size = 0.8) +
-    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-    ggplot2::geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.6) +
-    ggplot2::annotate("text",
-                      x = max(d_ref, na.rm = TRUE),
-                      y = min(d_test, na.rm = TRUE),
-                      hjust = 1, vjust = 0,
-                      label = sprintf("RMSE = %.3f\nr = %.3f", rmse, r),
-                      size = 3) +
-    ggplot2::labs(
-      title = title,
-      x = "Distance — IRIS brut",
-      y = "Distance — IRIS reconstruit"
-    ) +
-    ggplot2::theme_minimal(base_size = 12)
+  cor_val <- stats::cor(df$dist_A, df$dist_B, method = method)
+  if (isTRUE(verbose)) base::message(base::sprintf("[DIST] Corrélation %s : %.4f", method, cor_val))
+  
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = dist_A, y = dist_B)) +
+    ggplot2::geom_point(alpha = 0.6) +
+    ggplot2::geom_smooth(method = "lm", se = FALSE, color = "blue") +
+    ggplot2::labs(title = "Comparaison des distances MDS",
+                  subtitle = base::sprintf("Corrélation (%s) : %.3f", method, cor_val),
+                  x = "Distance (original)", y = "Distance (reconstruit)") +
+    ggplot2::theme_minimal(base_size = 14)
+  
+  return(p)
 }

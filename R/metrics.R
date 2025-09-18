@@ -226,10 +226,11 @@ viz_confusion_panel_from_predictions <- function(y_true,
   }) |> dplyr::bind_rows()
   
   macro_tbl <- tibble::tibble(
-    macro_precision = mean(per$precision, na.rm = TRUE),
-    macro_recall = mean(per$recall, na.rm = TRUE),
-    macro_f1 = mean(per$f1, na.rm = TRUE),
-    weighted_f1 = stats::weighted.mean(per$f1, w = per$TP + per$FN, na.rm = TRUE)
+    macro_precision     = mean(per$precision, na.rm = TRUE),
+    macro_recall        = mean(per$recall, na.rm = TRUE),
+    macro_specificity   = mean(per$specificity, na.rm = TRUE),
+    macro_f1            = mean(per$f1, na.rm = TRUE),
+    weighted_f1         = stats::weighted.mean(per$f1, w = per$TP + per$FN, na.rm = TRUE)
   )
   
   metrics_list <- list(accuracy = acc, per_class_tbl = per, macro_tbl = macro_tbl)
@@ -272,6 +273,7 @@ viz_confusion_panel_from_predictions <- function(y_true,
   
   return(p)
 }
+
 
 # --  4) Courbes d'entraînement (history Keras) ----
 
@@ -369,4 +371,59 @@ history_curves_plot <- function(history,
   }
   if (isTRUE(verbose)) base::message("[history_curves_plot] OK")
   return(p)
+}
+
+
+#' Multilabel evaluation metrics
+#'
+#' @param y_true matrice binaire (n_samples x n_labels)
+#' @param y_pred matrice binaire (n_samples x n_labels)
+#' @return list avec exact_match, hamming_loss, micro_f1, macro_f1
+multilabel_metrics <- function(y_true, y_pred) {
+  if (!is.matrix(y_true) || !is.matrix(y_pred)) {
+    stop("y_true et y_pred doivent être des matrices binaires.")
+  }
+  
+  if (!all(dim(y_true) == dim(y_pred))) {
+    stop("Dimensions incompatibles entre y_true et y_pred.")
+  }
+  
+  n <- nrow(y_true)
+  L <- ncol(y_true)
+  
+  # Exact match ratio
+  exact_match <- mean(apply(y_true == y_pred, 1, all))
+  
+  # Hamming loss
+  hamming_loss <- mean(y_true != y_pred)
+  
+  # F1 micro
+  tp <- sum(y_true == 1 & y_pred == 1)
+  fp <- sum(y_true == 0 & y_pred == 1)
+  fn <- sum(y_true == 1 & y_pred == 0)
+  
+  precision_micro <- tp / (tp + fp + 1e-8)
+  recall_micro    <- tp / (tp + fn + 1e-8)
+  f1_micro        <- 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
+  
+  # F1 macro (moyenne sur labels)
+  f1_per_label <- c()
+  for (j in 1:L) {
+    tp_j <- sum(y_true[, j] == 1 & y_pred[, j] == 1)
+    fp_j <- sum(y_true[, j] == 0 & y_pred[, j] == 1)
+    fn_j <- sum(y_true[, j] == 1 & y_pred[, j] == 0)
+    
+    prec_j <- tp_j / (tp_j + fp_j + 1e-8)
+    rec_j  <- tp_j / (tp_j + fn_j + 1e-8)
+    f1_j   <- 2 * prec_j * rec_j / (prec_j + rec_j + 1e-8)
+    f1_per_label <- c(f1_per_label, f1_j)
+  }
+  f1_macro <- mean(f1_per_label)
+  
+  return(list(
+    exact_match   = exact_match,
+    hamming_loss  = hamming_loss,
+    f1_micro      = f1_micro,
+    f1_macro      = f1_macro
+  ))
 }

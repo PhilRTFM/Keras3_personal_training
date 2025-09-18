@@ -12,6 +12,15 @@
 # =====================================================================
 
 
+pdf("mes_plots.pdf")
+
+# Générer quelques graphiques
+plot(1:10, main = "Premier plot")
+hist(rnorm(100), main = "Deuxième plot")
+
+# Fermer le périphérique PDF
+dev.off()
+
 # -----------------------------------------------------------------------------
 # Démonstration complète sur iris :
 #  - Pré-traitement pour MLP (supervisé) et AE (non-supervisé)

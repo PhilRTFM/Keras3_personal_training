@@ -1,23 +1,12 @@
 # -- inst/examples/run_iris.R — Démonstration complète sur iris ---------------
 
-# Suppose l’existence de :
-#   R/utils.R
-#   R/suppervised_mod.R
-#   R/unsuppervised_mod.R
-#   R/visualizations.R
-#   R/eval_sup.R
-#   R/eval_unsup.R
-
-
-# --- Chargement des dépendances ------------------------------------------------
-base::source("R/utils.R",           chdir = TRUE)
-base::source("R/suppervised_mod.R",   chdir = TRUE)
-base::source("R/unsuppervised_mod.R", chdir = TRUE)
-base::source("R/visualizations.R",  chdir = TRUE)
-base::source("R/eval_sup.R",        chdir = TRUE)
-base::source("R/eval_unsup.R",      chdir = TRUE)
-
-
+# --- Chargement des dépendances ----------------------------------------------
+base::source("R/utils.R",            chdir = TRUE)
+base::source("R/suppervised_mod.R",  chdir = TRUE)
+base::source("R/unsuppervised_mod.R",chdir = TRUE)
+base::source("R/visualizations.R",   chdir = TRUE)
+base::source("R/eval_sup.R",         chdir = TRUE)
+base::source("R/eval_unsup.R",       chdir = TRUE)
 
 # --- Helpers internes --------------------------------------------------------
 
@@ -96,16 +85,28 @@ run_iris_demo <- function(seed = 123L,
                                       title = "Courbes entraînement AE",
                                       verbose = verbose)
   
+  # Distribution des erreurs reconstruction
+  p_err <- error_distributions(res_ae$errors_indiv,
+                               title = "Distribution erreurs reconstruction")
+  
+  # Shepard plot original vs reconstruit
+  p_shep <- shepard_plot(stats::dist(prep$X_test),
+                         stats::dist(res_ae$X_recon),
+                         method = "pearson",
+                         verbose = verbose)
+  
   # Préparer tous les plots
   all_plots <- list(
-    vis_raw$pca,
-    vis_raw$mds,
-    p_history_mlp,
-    res_mlp$confusion_plot,
-    p_history_ae,
-    res_ae$confusion_plot,
-    res_ae$pca_plot,
-    res_ae$mds_plot
+    vis_raw$pca,            # PCA brut
+    vis_raw$mds,            # MDS brut
+    p_history_mlp,          # courbes entraînement MLP
+    res_mlp$confusion_plot, # confusion MLP
+    p_history_ae,           # courbes entraînement AE
+    res_ae$confusion_plot,  # confusion AE (latents)
+    p_err,                  # distribution erreurs AE
+    p_shep,                 # Shepard plot AE
+    res_ae$pca_plot,        # PCA reconstruit
+    res_ae$mds_plot         # MDS reconstruit
   )
   
   # Export PDF 16:9 unique
