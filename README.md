@@ -30,11 +30,20 @@ Keras3_personal_training/
 └─ .gitignore
 ```
 
-## Utilisation
 
-Consultez les scripts dans `inst/examples/` pour des exemples d'utilisation sur des jeux de données classiques (`iris`, `msleep`).  
-Les fonctions principales sont dans le dossier `R/` et couvrent les modèles et les visualisations.
+---
 
-## Licence
+## ⚙️ Dépendances
 
-Ce projet est sous licence WTFPL.
+Lister dans `DESCRIPTION` (via `Imports:`).  
+Principaux packages utilisés :
+
+- **keras3** : modèles MLP et autoencodeurs
+- **ggplot2**, **patchwork** : visualisation
+- **FactoMineR** : PCA
+- **MASS** : MDS non-métrique
+- **dplyr**, **tidyr**, **tibble** : manipulation de données
+- **gridExtra**, **ggplotify** : tableaux ggplot
+- **reticulate** : gestion de la seed Python/TensorFlow
+
+---
